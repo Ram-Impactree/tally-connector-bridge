@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light;
+  --bg: #f0f4f8;
+  --panel: #ffffffcc;
+  --text: #1e293b;
+  --accent: #0f766e;
+  --warn: #b91c1c;
+  --ok: #166534;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background:
+    radial-gradient(circle at 20% 10%, #cdeeff, transparent 30%),
+    radial-gradient(circle at 80% 0%, #c7f9cc, transparent 20%),
+    var(--bg);
+  color: var(--text);
+}
+
+.shell {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.hero p {
+  margin-top: 0.4rem;
+}
+
+.card {
+  background: var(--panel);
+  backdrop-filter: blur(5px);
+  border: 1px solid #d9e4ec;
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.badge-installed,
+.badge-likelyInstalled {
+  background: #dcfce7;
+  color: var(--ok);
+}
+
+.badge-notFound,
+.badge-error {
+  background: #fee2e2;
+  color: var(--warn);
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+input {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 0.95rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+button,
+a.button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+  background: var(--accent);
+  color: #f8fafc;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+a.button.primary {
+  min-width: 240px;
+}
+
+.note {
+  margin-top: 0.8rem;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.error {
+  color: var(--warn);
+}
+
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column;
+  }
+}
