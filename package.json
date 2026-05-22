@@ -30,7 +30,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/axios": "^0.9.36",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "cors": "^2.8.6",
@@ -65,28 +64,36 @@
       "package.json"
     ],
     "win": {
-       "target": [
+      "target": [
         {
           "target": "nsis",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         }
       ],
       "icon": "build/icon.ico"
     },
-     "linux": {
+    "linux": {
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64", "ia32"]
+          "arch": [
+            "x64",
+            "ia32"
+          ]
         }
       ]
     },
-
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },

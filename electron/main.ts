@@ -6,7 +6,7 @@ import { listTallyCompanies, listTallyLedgers, testTallyConnection } from "./ser
 import type { ConnectorSettings } from "./types";
 import express from "express";
 import cors from "cors";
-import axios from "axios";
+
 
 const deviceId = crypto.randomUUID();
 
@@ -83,14 +83,18 @@ localApp.post("/pair", async (req, res) => {
     /**
      * Verify token with backend
      */
-    const backendResponse = await axios.post(
+    const backendResponse = await fetch(
       "https://api.mockapi.com/bridge/register",
       {
-        "token": JSON.stringify(pairingToken),
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ token: pairingToken })
       }
     );
-
-    const data = backendResponse.data[0];
+    const resData = await backendResponse.json();
+    const data = resData.data[0];
     console.log("Backend pairing response", data);
 
     /**
@@ -147,15 +151,17 @@ localApp.post("/sync", async (req:any, res:any) => {
     /**
      * Upload to backend
      */
-    await axios.post(
+     const backendResponse = await fetch(
       "https://647dab5faf984710854a179a.mockapi.io/tally",
-      tallyData,
       {
+        method: "POST",
         headers: {
-          Authorization: `Bearer ${bridgeState.bridgeToken}`,
+          "Content-Type": "application/json"
         },
+        body: JSON.stringify(tallyData)
       }
     );
+    const resData = await backendResponse.json();
 
     return res.json({
       success: true,
