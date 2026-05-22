@@ -11,7 +11,16 @@
     "build:renderer": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "dist": "npm run build && electron-builder --win",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit"
+    "dist:all": "node scripts/build-all.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "dist:win64": "electron-builder --win --x64",
+    "dist:win32": "electron-builder --win --ia32",
+    "dist:linux64": "electron-builder --linux --x64",
+    "dist:linux32": "electron-builder --linux --ia32",
+    "dist:linux-all": "node scripts/build-linux-all.js",
+    "dist:mac": "electron-builder --mac --x64",
+    "dist:macArm": "electron-builder --mac --arm64",
+    "dist:mac-all": "node scripts/build-mac-all.js"
   },
   "keywords": [
     "tally",
@@ -21,6 +30,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/axios": "^0.9.36",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "fast-xml-parser": "^5.7.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
@@ -41,6 +55,7 @@
   "build": {
     "appId": "com.internproject.tallyconnector",
     "productName": "Tally Connector",
+    "artifactName": "Tally Connector-${version}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -50,7 +65,36 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+       "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+     "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64", "ia32"]
+        }
+      ]
+    },
+
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

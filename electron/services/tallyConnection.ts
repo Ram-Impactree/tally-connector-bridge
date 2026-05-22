@@ -3,7 +3,142 @@ import { XMLParser } from 'fast-xml-parser';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  textNodeName: "#text",
+  trimValues: true,
+  parseTagValue: false,
 });
+
+function normalizeArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+}
+
+function normalizeTallyValue(value: unknown): unknown {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(normalizeTallyValue);
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  const textValue = record["#text"];
+  const hasText = textValue !== undefined;
+  const nonAttributeKeys = keys.filter((key) => !key.startsWith("@_") && key !== "#text");
+
+  if (nonAttributeKeys.length === 0 && hasText) {
+    return textValue;
+  }
+
+  const normalized: Record<string, unknown> = {};
+
+  for (const key of keys) {
+    if (key === "#text" || key === "@_TYPE") {
+      continue;
+    }
+
+    if (key === "@_NAME") {
+      const nameValue = normalizeTallyValue(record[key]);
+      if (typeof nameValue === "string") {
+        normalized.NAME = nameValue;
+        // normalized.name = nameValue;
+      }
+      continue;
+    }
+
+    const childValue = normalizeTallyValue(record[key]);
+    if (childValue !== undefined) {
+      normalized[key] = childValue;
+    }
+  }
+
+  if (hasText && Object.keys(normalized).length === 0) {
+    return textValue;
+  }
+
+  return normalized;
+}
+
+function extractLedgerItemsFromParsedXml(parsedXml: unknown): any[] {
+  const ledgers: any[] = [];
+
+  function walk(node: unknown) {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+
+    const record = node as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(record, "LEDGER")) {
+      ledgers.push(...normalizeArray(record.LEDGER));
+    }
+
+    for (const value of Object.values(record)) {
+      walk(value);
+    }
+  }
+
+  walk(parsedXml);
+  return ledgers;
+}
+
+function isValidLedgerRecord(candidate: unknown): candidate is Record<string, unknown> {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return false;
+  }
+
+  const record = candidate as Record<string, unknown>;
+  return (
+    Object.prototype.hasOwnProperty.call(record, "@_NAME") ||
+    Object.prototype.hasOwnProperty.call(record, "NAME") ||
+    Object.prototype.hasOwnProperty.call(record, "GUID")
+  );
+}
+
+function parseLedgerItems(xml: string): TallyListItem[] {
+  const parsed = parser.parse(xml);
+  const ledgerItems = extractLedgerItemsFromParsedXml(parsed).filter(isValidLedgerRecord);
+
+  if (ledgerItems.length === 0) {
+    return parseXmlItems(xml, "LEDGER", ["NAME", "PARENT", "OPENINGBALANCE", "CLOSINGBALANCE", "GUID", "ADDRESS"], "LEDGER");
+  }
+
+  return ledgerItems.map((rawLedger) => {
+    const normalized = normalizeTallyValue(rawLedger);
+    const ledger = (typeof normalized === "object" && normalized !== null ? normalized : {}) as TallyListItem;
+
+    // if (!ledger.name && typeof ledger.NAME === "string") {
+    //   ledger.name = ledger.NAME;
+    // }
+    // if (!ledger.guid && typeof ledger.GUID === "string") {
+    //   ledger.guid = ledger.GUID;
+    // }
+    // if (!ledger.closingBalance && typeof ledger.CLOSINGBALANCE === "string") {
+    //   ledger.closingBalance = ledger.CLOSINGBALANCE;
+    // }
+    // if (!ledger.openingBalance && typeof ledger.OPENINGBALANCE === "string") {
+    //   ledger.openingBalance = ledger.OPENINGBALANCE;
+    // }
+    // if (!ledger.parent && typeof ledger.PARENT === "string") {
+    //   ledger.parent = ledger.PARENT;
+    // }
+
+    return ledger;
+  });
+}
 
 // const REQUEST_XML = `<?xml version="1.0" encoding="utf-8"?>
 // <ENVELOPE>
@@ -61,39 +196,82 @@ const parser = new XMLParser({
   </ENVELOPE>
   `;
 
-const LEDGER_XML = `
-<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>Ledger Collection</ID>
-  </HEADER>
+  const LEDGER_XML = `
+ <ENVELOPE>
 
-  <BODY>
-    <DESC>
-      <TDL>
-        <TDLMESSAGE>
+    <HEADER>
+      <VERSION>1</VERSION>
+      <TALLYREQUEST>Export</TALLYREQUEST>
+      <TYPE>Collection</TYPE>
+      <ID>Ledger Collection</ID>
+    </HEADER>
 
-          <COLLECTION NAME="Ledger Collection">
-            <TYPE>Ledger</TYPE>
+    <BODY>
+      <DESC>
 
-            <NATIVEMETHOD>Name</NATIVEMETHOD>
-            <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+        <TDL>
+          <TDLMESSAGE>
 
-          </COLLECTION>
+            <COLLECTION NAME="Ledger Collection">
+              <TYPE>Ledger</TYPE>
 
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
-</ENVELOPE>
+              <NATIVEMETHOD>Name</NATIVEMETHOD>
+              <NATIVEMETHOD>Parent</NATIVEMETHOD>
+              <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
+              <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+              <NATIVEMETHOD>GUID</NATIVEMETHOD>
+              <NATIVEMETHOD>Address</NATIVEMETHOD>
+              <NATIVEMETHOD>PhoneNumber</NATIVEMETHOD>
+              <NATIVEMETHOD>Email</NATIVEMETHOD>
+              <NATIVEMETHOD>IncomeTaxNumber</NATIVEMETHOD>
+              <NATIVEMETHOD>GSTIN</NATIVEMETHOD>
+              <NATIVEMETHOD>LanguageName</NATIVEMETHOD>
+
+            </COLLECTION>
+
+          </TDLMESSAGE>
+        </TDL>
+
+      </DESC>
+    </BODY>
+
+  </ENVELOPE>
 `;
+
+// const LEDGER_XML = `
+// <ENVELOPE>
+//   <HEADER>
+//     <VERSION>1</VERSION>
+//     <TALLYREQUEST>Export</TALLYREQUEST>
+//     <TYPE>Collection</TYPE>
+//     <ID>Ledger Collection</ID>
+//   </HEADER>
+
+//   <BODY>
+//     <DESC>
+//       <TDL>
+//         <TDLMESSAGE>
+
+//           <COLLECTION NAME="Ledger Collection">
+//             <TYPE>Ledger</TYPE>
+
+//             <NATIVEMETHOD>Name</NATIVEMETHOD>
+//             <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+
+//           </COLLECTION>
+
+//         </TDLMESSAGE>
+//       </TDL>
+//     </DESC>
+//   </BODY>
+// </ENVELOPE>
+// `;
 
 function getEndpoint(host: string, port: number) {
   const safeHost = host.trim() || "127.0.0.1";
   const safePort = Number.isFinite(port) && port > 0 ? port : 9000;
-  return `http://${safeHost}:${safePort}`;
+  // return `http://${safeHost}:${safePort}`;
+  return `http://127.0.0.1:9000`;
 }
 
 async function sendXml(host: string, port: number, xml: string) {
@@ -300,7 +478,7 @@ export async function listTallyLedgers(host: string, port: number): Promise<Tall
   }
 
   console.log("Ledger XML Response:", result.rawXml);
-  const items = parseXmlItems(result.rawXml, "LEDGER", ["NAME", "CLOSINGBALANCE"], "Ledger");
+  const items = parseLedgerItems(result.rawXml);
   console.log("Parsed ledgers:", items);
 
   return {

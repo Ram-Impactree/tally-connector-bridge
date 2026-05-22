@@ -26,7 +26,10 @@ export interface TallyConnectionResult {
 export interface TallyListItem {
   name: string;
   closingBalance?: string;
+  openingBalance?: string;
   guid?: string;
+  parent?: string;
+  [key: string]: unknown;
 }
 
 export interface TallyListResult {

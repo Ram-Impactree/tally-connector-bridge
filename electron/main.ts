@@ -4,6 +4,183 @@ import { ConfigStore } from "./services/configStore";
 import { detectTallyInstallation } from "./services/tallyDetector";
 import { listTallyCompanies, listTallyLedgers, testTallyConnection } from "./services/tallyConnection";
 import type { ConnectorSettings } from "./types";
+import express from "express";
+import cors from "cors";
+import axios from "axios";
+
+const deviceId = crypto.randomUUID();
+
+// const localApp = express();
+// localApp.use(cors());
+// localApp.use(express.json());
+
+// localApp.get("/status", (req:any, res:any) => {
+//   res.json({
+//     installed: true,
+//     running: true,
+//     deviceId: deviceId,
+//   });
+// });
+
+// // localApp.listen(47825, () => {
+// //   console.log("Bridge running on 47825");
+// // });
+
+// localApp.listen(47825, "127.0.0.1", () => {
+//   console.log("Bridge running on 47825");
+// });
+
+
+// API STATUS | PAIR | SYNC
+
+const localApp = express();
+
+localApp.use(cors());
+localApp.use(express.json());
+
+const PORT = 47825;
+
+/**
+ * Local bridge memory storage
+ * Replace with secure storage later
+ */
+let bridgeState = {
+  paired: false,
+  tenantId: null as string | null,
+  bridgeToken: null as string | null,
+};
+
+/**
+ * -----------------------------------
+ * GET /status
+ * -----------------------------------
+ */
+localApp.get("/status", async (req, res) => {
+  res.json({
+    installed: true,
+    running: true,
+    paired: bridgeState.paired,
+    tenantId: bridgeState.tenantId,
+  });
+});
+
+/**
+ * -----------------------------------
+ * POST /pair
+ * -----------------------------------
+ */
+localApp.post("/pair", async (req, res) => {
+  try {
+    const { pairingToken } = req.body;
+    console.log("pairingToken", pairingToken)
+    if (!pairingToken) {
+      return res.status(400).json({
+        success: false,
+        message: "pairingToken required",
+      });
+    }
+
+    /**
+     * Verify token with backend
+     */
+    const backendResponse = await axios.post(
+      "https://api.mockapi.com/bridge/register",
+      {
+        "token": JSON.stringify(pairingToken),
+      }
+    );
+
+    const data = backendResponse.data[0];
+    console.log("Backend pairing response", data);
+
+    /**
+     * Save pairing info
+     */
+    bridgeState = {
+      paired: true,
+      tenantId: data.tenantId,
+      bridgeToken: data.bridgeToken,
+    };
+
+    return res.json({
+      success: true,
+      tenantId: data.tenantId,
+      message: "Pairing successful",
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message:
+        error?.response?.data?.message ||
+        "Pairing failed",
+    });
+  }
+});
+
+/**
+ * -----------------------------------
+ * POST /sync
+ * -----------------------------------
+ */
+localApp.post("/sync", async (req:any, res:any) => {
+  try {
+    /**
+     * Check pairing
+     */
+    if (!bridgeState.paired) {
+      return res.status(401).json({
+        success: false,
+        message: "Bridge not paired",
+      });
+    }
+
+    /**
+     * Example Tally data
+     * Replace with real Tally XML parsing
+     */
+    const tallyData = {
+      companies: [],
+      ledgers: [],
+      vouchers: [],
+    };
+
+    /**
+     * Upload to backend
+     */
+    await axios.post(
+      "https://647dab5faf984710854a179a.mockapi.io/tally",
+      tallyData,
+      {
+        headers: {
+          Authorization: `Bearer ${bridgeState.bridgeToken}`,
+        },
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Sync completed",
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message:
+        error?.response?.data?.message ||
+        "Sync failed",
+    });
+  }
+});
+
+/**
+ * -----------------------------------
+ * Start Local Server
+ * -----------------------------------
+ */
+localApp.listen(PORT, "127.0.0.1", () => {
+  console.log(
+    `Bridge running at http://127.0.0.1:${PORT}`
+  );
+});
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -177,6 +354,39 @@ async function bootstrap() {
           deduplicateBy: "name",
           companyName: "All Companies",
           records: companies.map(name => ({ name }))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      return { ok: true, data: result };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("connector:syncLedgersToCloud", async (_, ledgers: unknown[], cloudBaseUrl: string, accessToken: string) => {
+    try {
+      const endpoint = cloudBaseUrl.trim() || "https://647dab5faf984710854a179a.mockapi.io/tally";
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          source: "tally",
+          syncType: "merge",
+          deduplicateBy: "guid",
+          ledgerName: "All Ledgers",
+          records: ledgers
         })
       });
 

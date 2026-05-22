@@ -11,6 +11,7 @@ type StatusModel = {
   };
   settings: {
     cloudBaseUrl: string;
+    accessToken: string;
     tallyHost: string;
     tallyPort: number;
   };
@@ -18,7 +19,8 @@ type StatusModel = {
 
 type LedgerRow = {
   name: string;
-  closingBalance: string;
+  closingBalance?: string;
+  [key: string]: unknown;
 };
 
 const defaultStatus: StatusModel = {
@@ -143,12 +145,7 @@ function App() {
         form.tallyPort,
       );
       if (result.ok) {
-        setLedgers(
-          result.items.map((item) => ({
-            name: item.name,
-            closingBalance: item.closingBalance ?? "",
-          })),
-        );
+        setLedgers(result.items);
         setMessage(result.message);
       } else {
         setLedgers([]);
@@ -173,6 +170,27 @@ function App() {
       );
       if (result.ok) {
         setMessage("Companies synced successfully");
+      } else {
+        setMessage(`Sync failed: ${result.error}`);
+      }
+    } catch (error) {
+      setMessage(`Sync failed: ${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncLedgers = async () => {
+    setBusy(true);
+    setMessage("Syncing ledgers to mock API...");
+    try {
+      const result = await window.connectorApi.syncLedgersToCloud(
+        ledgers,
+        form.cloudBaseUrl,
+        form.accessToken,
+      );
+      if (result.ok) {
+        setMessage("Ledgers synced successfully");
       } else {
         setMessage(`Sync failed: ${result.error}`);
       }
@@ -309,6 +327,13 @@ function App() {
             onClick={syncCompanies}
           >
             Sync Companies to Cloud
+          </button>
+          <button
+            type="button"
+            disabled={busy || ledgers.length === 0 || !form.cloudBaseUrl}
+            onClick={syncLedgers}
+          >
+            Sync Ledgers to Cloud
           </button>
         </div>
 

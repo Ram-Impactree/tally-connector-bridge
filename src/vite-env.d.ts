@@ -1,5 +1,6 @@
 interface ConnectorSettings {
   cloudBaseUrl: string;
+  accessToken: string;
   tallyHost: string;
   tallyPort: number;
 }
@@ -23,7 +24,10 @@ interface TallyConnectionResult {
 interface TallyListItem {
   name: string;
   closingBalance?: string;
+  openingBalance?: string;
   guid?: string;
+  parent?: string;
+  [key: string]: unknown;
 }
 
 interface TallyListResult {
@@ -44,6 +48,11 @@ interface ConnectorApi {
   listTallyCompanies: (host: string, port: number) => Promise<TallyListResult>;
   listTallyLedgers: (host: string, port: number) => Promise<TallyListResult>;
   syncCompaniesToCloud: (companies: string[], cloudBaseUrl: string, accessToken: string) => Promise<{
+    ok: boolean;
+    data?: any;
+    error?: string;
+  }>;
+  syncLedgersToCloud: (ledgers: TallyListItem[], cloudBaseUrl: string, accessToken: string) => Promise<{
     ok: boolean;
     data?: any;
     error?: string;

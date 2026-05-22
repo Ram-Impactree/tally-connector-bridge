@@ -11,7 +11,9 @@ const api = {
   listTallyLedgers: (host: string, port: number) =>
     ipcRenderer.invoke("connector:listTallyLedgers", host, port),
   syncCompaniesToCloud: (companies: string[], cloudBaseUrl: string, accessToken: string) =>
-    ipcRenderer.invoke("connector:syncCompaniesToCloud", companies, cloudBaseUrl, accessToken)
+    ipcRenderer.invoke("connector:syncCompaniesToCloud", companies, cloudBaseUrl, accessToken),
+  syncLedgersToCloud: (ledgers: unknown[], cloudBaseUrl: string, accessToken: string) =>
+    ipcRenderer.invoke("connector:syncLedgersToCloud", ledgers, cloudBaseUrl, accessToken)
 };
 
 contextBridge.exposeInMainWorld("connectorApi", api);
