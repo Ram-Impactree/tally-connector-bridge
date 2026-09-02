@@ -42,7 +42,9 @@ function App() {
   const [form, setForm] = useState(defaultStatus.settings);
   const [connectionString, setConnectionString] = useState("");
   const [connectionStringError, setConnectionStringError] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState<"idle" | "connected">("idle");
+  const [connectionStatus, setConnectionStatus] = useState<
+    "idle" | "connected"
+  >("idle");
   const [busy, setBusy] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
@@ -118,7 +120,9 @@ function App() {
     }
     setConnectionStringError("");
     await window.connectorApi.saveConnectionString(connectionString.trim());
-    const reg = await window.connectorApi.registerDatabridge(connectionString.trim());
+    const reg = await window.connectorApi.registerDatabridge(
+      connectionString.trim(),
+    );
     if (!reg.ok) {
       setConnectionStringError(`Registration failed: ${reg.error}`);
       return;
@@ -356,7 +360,13 @@ function App() {
           )}
         </label>
         {connectionStatus === "connected" && (
-          <p style={{ color: "var(--ok)", fontWeight: 600, margin: "0 0 0.75rem" }}>
+          <p
+            style={{
+              color: "var(--ok)",
+              fontWeight: 600,
+              margin: "0 0 0.75rem",
+            }}
+          >
             ✓ You are connected successfully.
           </p>
         )}
