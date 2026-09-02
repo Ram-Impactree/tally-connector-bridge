@@ -5,6 +5,8 @@ export interface ConnectorSettings {
   accessToken: string;
   tallyHost: string;
   tallyPort: number;
+  connectionString: string;
+  tallyCompany?: string;
 }
 
 export interface TallyDetectionResult {
@@ -36,6 +38,13 @@ export interface TallyListResult {
   ok: boolean;
   message: string;
   items: TallyListItem[];
+}
+
+export interface TallyModulesResult {
+  ok: boolean;
+  message: string;
+  modules: Record<string, TallyListItem[]>;
+  errors?: Record<string, string>;
 }
 
 export interface SystemStatus {

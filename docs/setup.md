@@ -55,15 +55,17 @@ When deploying the React frontend, configure the public download URL with an env
 Create a `.env` file in the project root or set the variable in your hosting environment:
 
 ```env
-VITE_EXE_DOWNLOAD_URL=https://download.example.com/Tally-Connector-Setup.exe
+VITE_EXE_DOWNLOAD_URL=https://github.com/Ram-Impactree/tally-connector-bridge/releases/download/v1.0.1/Tally.Connector-1.0.0-x64.exe
 ```
 
 The app uses this URL to render the download button on the browser version of the page.
 
 ## Auto-sync behavior
+
 When the desktop app launches and Tally is detected as running, it automatically sends company data to the configured `cloudBaseUrl` endpoint.
 
 The payload includes:
+
 - `source`: "tally"
 - `syncType`: "merge"
 - `deduplicateBy`: "guid"

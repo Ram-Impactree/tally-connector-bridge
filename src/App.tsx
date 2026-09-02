@@ -40,11 +40,18 @@ const defaultStatus: StatusModel = {
 function App() {
   const [status, setStatus] = useState<StatusModel>(defaultStatus);
   const [form, setForm] = useState(defaultStatus.settings);
+  const [connectionString, setConnectionString] = useState("");
+  const [connectionStringError, setConnectionStringError] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState<"idle" | "connected">("idle");
   const [busy, setBusy] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadingLedgers, setLoadingLedgers] = useState(false);
+  const [loadingMasters, setLoadingMasters] = useState(false);
   const [companies, setCompanies] = useState<string[]>([]);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
+  const [masterModules, setMasterModules] = useState<Record<string, unknown[]>>(
+    {},
+  );
   const [message, setMessage] = useState("Ready");
 
   const installerDownloadUrl =
@@ -65,6 +72,11 @@ function App() {
         const systemStatus = await window.connectorApi.getSystemStatus();
         setStatus(systemStatus);
         setForm(systemStatus.settings);
+        const savedCs = await window.connectorApi.getConnectionString();
+        if (savedCs) {
+          setConnectionString(savedCs);
+          setConnectionStatus("connected");
+        }
       }
     })();
   }, [isElectron]);
@@ -82,6 +94,38 @@ function App() {
     return "Tally installation not found";
   }, [status.tally.status]);
 
+  const tallyModuleTypes = [
+    "Company",
+    "Ledger",
+    "Group",
+    "VoucherType",
+    "Godown",
+    "StockItem",
+    "StockGroup",
+    "Unit",
+    "StockCategory",
+    "CostCenter",
+    "CostCategory",
+    "Employee",
+    "TaxCategory",
+  ];
+
+  const submitConnectionString = async () => {
+    if (!connectionString.trim()) {
+      setConnectionStringError("Connection string is required.");
+      setConnectionStatus("idle");
+      return;
+    }
+    setConnectionStringError("");
+    await window.connectorApi.saveConnectionString(connectionString.trim());
+    const reg = await window.connectorApi.registerDatabridge(connectionString.trim());
+    if (!reg.ok) {
+      setConnectionStringError(`Registration failed: ${reg.error}`);
+      return;
+    }
+    setConnectionStatus("connected");
+  };
+
   const saveSettings = async () => {
     setBusy(true);
     try {
@@ -90,6 +134,54 @@ function App() {
       setMessage("Settings saved");
     } catch (error) {
       setMessage(`Failed to save settings: ${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadTallyMasterModules = async () => {
+    setLoadingMasters(true);
+    setMessage("Loading all Tally master modules...");
+    try {
+      const result = await window.connectorApi.listTallyMasters(
+        form.tallyHost,
+        form.tallyPort,
+        tallyModuleTypes,
+      );
+
+      if (result.ok) {
+        setMasterModules(result.modules);
+        setMessage("Tally master modules loaded successfully");
+      } else {
+        setMasterModules(result.modules);
+        setMessage(
+          `Loaded with errors: ${JSON.stringify(result.errors ?? {})}`,
+        );
+      }
+    } catch (error) {
+      setMasterModules({});
+      setMessage(`Failed to load Tally modules: ${String(error)}`);
+    } finally {
+      setLoadingMasters(false);
+    }
+  };
+
+  const syncAllMasterModules = async () => {
+    setBusy(true);
+    setMessage("Syncing all Tally master modules to cloud...");
+    try {
+      const result = await window.connectorApi.syncTallyMastersToCloud(
+        masterModules,
+        form.cloudBaseUrl,
+      );
+
+      if (result.ok) {
+        setMessage("All Tally master modules synced successfully");
+      } else {
+        setMessage(`Sync failed: ${result.error}`);
+      }
+    } catch (error) {
+      setMessage(`Sync failed: ${String(error)}`);
     } finally {
       setBusy(false);
     }
@@ -166,7 +258,6 @@ function App() {
       const result = await window.connectorApi.syncCompaniesToCloud(
         companies,
         form.cloudBaseUrl,
-        form.accessToken,
       );
       if (result.ok) {
         setMessage("Companies synced successfully");
@@ -187,7 +278,6 @@ function App() {
       const result = await window.connectorApi.syncLedgersToCloud(
         ledgers,
         form.cloudBaseUrl,
-        form.accessToken,
       );
       if (result.ok) {
         setMessage("Ledgers synced successfully");
@@ -244,6 +334,35 @@ function App() {
             ))}
           </ul>
         ) : null}
+      </section>
+
+      <section className="card">
+        <h2>Connection</h2>
+        <label>
+          Connection String
+          <input
+            value={connectionString}
+            onChange={(e) => {
+              setConnectionString(e.target.value);
+              if (connectionStringError) setConnectionStringError("");
+              if (connectionStatus === "connected") setConnectionStatus("idle");
+            }}
+            placeholder="Paste your connection string here"
+          />
+          {connectionStringError && (
+            <span className="error" style={{ fontSize: "0.85rem" }}>
+              {connectionStringError}
+            </span>
+          )}
+        </label>
+        {connectionStatus === "connected" && (
+          <p style={{ color: "var(--ok)", fontWeight: 600, margin: "0 0 0.75rem" }}>
+            ✓ You are connected successfully.
+          </p>
+        )}
+        <button type="button" onClick={submitConnectionString}>
+          Connect
+        </button>
       </section>
 
       <section className="card">
@@ -323,6 +442,15 @@ function App() {
           </button>
           <button
             type="button"
+            disabled={busy || loadingMasters}
+            onClick={loadTallyMasterModules}
+          >
+            {loadingMasters
+              ? "Loading All Masters..."
+              : "Load All Tally Masters"}
+          </button>
+          <button
+            type="button"
             disabled={busy || companies.length === 0 || !form.cloudBaseUrl}
             onClick={syncCompanies}
           >
@@ -335,10 +463,35 @@ function App() {
           >
             Sync Ledgers to Cloud
           </button>
+          <button
+            type="button"
+            disabled={
+              busy ||
+              Object.keys(masterModules).length === 0 ||
+              !form.cloudBaseUrl
+            }
+            onClick={syncAllMasterModules}
+          >
+            Sync All Master Modules to Cloud
+          </button>
         </div>
 
         <p>Companies found: {companies.length}</p>
         <p>Ledgers found: {ledgers.length}</p>
+        <p>Master modules loaded: {Object.keys(masterModules).length}</p>
+
+        {Object.keys(masterModules).length > 0 ? (
+          <div>
+            <h3>Master Module Counts</h3>
+            <ul>
+              {Object.entries(masterModules).map(([moduleName, records]) => (
+                <li key={moduleName}>
+                  {moduleName}: {records.length} records
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {companies.length > 0 ? (
           <div>

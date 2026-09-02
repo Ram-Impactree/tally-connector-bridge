@@ -119,25 +119,143 @@ function parseLedgerItems(xml: string): TallyListItem[] {
   return ledgerItems.map((rawLedger) => {
     const normalized = normalizeTallyValue(rawLedger);
     const ledger = (typeof normalized === "object" && normalized !== null ? normalized : {}) as TallyListItem;
-
-    // if (!ledger.name && typeof ledger.NAME === "string") {
-    //   ledger.name = ledger.NAME;
-    // }
-    // if (!ledger.guid && typeof ledger.GUID === "string") {
-    //   ledger.guid = ledger.GUID;
-    // }
-    // if (!ledger.closingBalance && typeof ledger.CLOSINGBALANCE === "string") {
-    //   ledger.closingBalance = ledger.CLOSINGBALANCE;
-    // }
-    // if (!ledger.openingBalance && typeof ledger.OPENINGBALANCE === "string") {
-    //   ledger.openingBalance = ledger.OPENINGBALANCE;
-    // }
-    // if (!ledger.parent && typeof ledger.PARENT === "string") {
-    //   ledger.parent = ledger.PARENT;
-    // }
-
     return ledger;
   });
+}
+
+function extractItemsFromParsedXml(parsedXml: unknown, typeName: string): any[] {
+  const items: any[] = [];
+  const upperTypeName = typeName.toUpperCase();
+
+  function walk(node: unknown) {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+
+    const record = node as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(record, upperTypeName)) {
+      items.push(...normalizeArray(record[upperTypeName]));
+    }
+
+    for (const value of Object.values(record)) {
+      walk(value);
+    }
+  }
+
+  walk(parsedXml);
+  return items;
+}
+
+function parseXmlRecords(xml: string, itemTag: string): TallyListItem[] {
+  const parsed = parser.parse(xml);
+  const records = extractItemsFromParsedXml(parsed, itemTag);
+
+  return records
+    .map((record) => normalizeTallyValue(record))
+    .filter((record): record is Record<string, unknown> => typeof record === "object" && record !== null)
+    .map((record) => {
+      const normalized: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(record)) {
+        normalized[k.toLowerCase()] = v;
+      }
+      if (!normalized.name && typeof record.NAME === "string") {
+        normalized.name = record.NAME;
+      }
+      if (!normalized.guid && typeof record.GUID === "string") {
+        normalized.guid = record.GUID;
+      }
+      return normalized as TallyListItem;
+    })
+    .filter((item) => !!item.name);
+}
+
+const ENTITY_FIELDS: Record<string, string[]> = {
+  Company:       ["Name", "GUID", "StartingFrom", "BooksFrom"],
+  Ledger:        ["Name", "GUID", "Parent", "OpeningBalance", "ClosingBalance", "Address", "PhoneNumber", "Email", "GSTIN", "IncomeTaxNumber"],
+  Group:         ["Name", "GUID", "Parent", "Nature"],
+  VoucherType:   ["Name", "GUID", "Parent", "NumberingMethod", "IsDeemedPositive"],
+  Godown:        ["Name", "GUID", "Parent", "Address"],
+  StockItem:     ["Name", "GUID", "Parent", "Category", "BaseUnits", "OpeningBalance", "ClosingBalance", "OpeningRate", "ClosingRate"],
+  StockGroup:    ["Name", "GUID", "Parent"],
+  Unit:          ["Name", "GUID", "UQCName", "IsSIMPLEUnit"],
+  StockCategory: ["Name", "GUID", "Parent"],
+  CostCenter:    ["Name", "GUID", "Parent", "Category"],
+  CostCategory:  ["Name", "GUID", "AllocateRevenue", "AllocateNonRevenue"],
+  Employee:      ["Name", "GUID", "Parent", "EmployeeNumber", "Designation", "Function", "DateOfJoining"],
+  TaxCategory:   ["Name", "GUID"],
+};
+
+function buildCollectionXml(typeName: string): string {
+  const fields = ENTITY_FIELDS[typeName] ?? ["Name", "GUID"];
+  const fetchXml = fields.map((f) => `              <FETCH>${f}</FETCH>`).join("\n");
+
+  return `
+  <ENVELOPE>
+    <HEADER>
+      <VERSION>1</VERSION>
+      <TALLYREQUEST>Export</TALLYREQUEST>
+      <TYPE>Collection</TYPE>
+      <ID>${typeName} Collection</ID>
+    </HEADER>
+    <BODY>
+      <DESC>
+        <STATICVARIABLES>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        </STATICVARIABLES>
+        <TDL>
+          <TDLMESSAGE>
+            <COLLECTION NAME="${typeName} Collection" ISMODIFY="No">
+              <TYPE>${typeName}</TYPE>
+<FETCH>*</FETCH>
+            </COLLECTION>
+          </TDLMESSAGE>
+        </TDL>
+      </DESC>
+    </BODY>
+  </ENVELOPE>
+  `;
+}
+
+export async function listTallyMaster(host: string, port: number, typeName: string): Promise<TallyListResult> {
+  const result = await sendXml(host, port, buildCollectionXml(typeName));
+  if (!result.ok || !result.rawXml) {
+    return { ok: false, message: result.message, items: [] };
+  }
+
+  const items = parseXmlRecords(result.rawXml, typeName);
+  return {
+    ok: true,
+    message: `${typeName} list loaded (${items.length} records)`,
+    items
+  };
+}
+
+export async function listTallyMasters(host: string, port: number, types: string[]): Promise<{ ok: boolean; message: string; modules: Record<string, TallyListItem[]>; errors?: Record<string, string>; }> {
+  const modules: Record<string, TallyListItem[]> = {};
+  const errors: Record<string, string> = {};
+
+  await Promise.all(types.map(async (typeName) => {
+    const result = await listTallyMaster(host, port, typeName);
+    if (result.ok) {
+      modules[typeName] = result.items;
+    } else {
+      errors[typeName] = result.message;
+      modules[typeName] = [];
+    }
+  }));
+
+  const ok = Object.keys(errors).length === 0;
+  return {
+    ok,
+    message: ok ? "Tally master modules loaded successfully" : "Tally master modules loaded with errors",
+    modules,
+    errors: Object.keys(errors).length > 0 ? errors : undefined
+  };
 }
 
 // const REQUEST_XML = `<?xml version="1.0" encoding="utf-8"?>
@@ -270,8 +388,7 @@ function parseLedgerItems(xml: string): TallyListItem[] {
 function getEndpoint(host: string, port: number) {
   const safeHost = host.trim() || "127.0.0.1";
   const safePort = Number.isFinite(port) && port > 0 ? port : 9000;
-  // return `http://${safeHost}:${safePort}`;
-  return `http://127.0.0.1:9000`;
+  return `http://${safeHost}:${safePort}`;
 }
 
 async function sendXml(host: string, port: number, xml: string) {

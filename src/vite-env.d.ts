@@ -3,6 +3,7 @@ interface ConnectorSettings {
   accessToken: string;
   tallyHost: string;
   tallyPort: number;
+  connectionString: string;
 }
 
 interface TallyDetectionResult {
@@ -47,16 +48,25 @@ interface ConnectorApi {
   testTallyEndpoint: (host: string, port: number) => Promise<TallyConnectionResult>;
   listTallyCompanies: (host: string, port: number) => Promise<TallyListResult>;
   listTallyLedgers: (host: string, port: number) => Promise<TallyListResult>;
-  syncCompaniesToCloud: (companies: string[], cloudBaseUrl: string, accessToken: string) => Promise<{
+  listTallyMasters: (host: string, port: number, types: string[]) => Promise<{ ok: boolean; message: string; modules: Record<string, TallyListItem[]>; errors?: Record<string, string>; }>;
+  syncCompaniesToCloud: (companies: string[], cloudBaseUrl: string) => Promise<{
     ok: boolean;
     data?: any;
     error?: string;
   }>;
-  syncLedgersToCloud: (ledgers: TallyListItem[], cloudBaseUrl: string, accessToken: string) => Promise<{
+  syncLedgersToCloud: (ledgers: TallyListItem[], cloudBaseUrl: string) => Promise<{
     ok: boolean;
     data?: any;
     error?: string;
   }>;
+  syncTallyMastersToCloud: (modulesData: Record<string, unknown[]>, cloudBaseUrl: string) => Promise<{
+    ok: boolean;
+    data?: any;
+    error?: string;
+  }>;
+  saveConnectionString: (connectionString: string) => Promise<ConnectorSettings>;
+  getConnectionString: () => Promise<string>;
+  registerDatabridge: (slug: string) => Promise<{ ok: boolean; data?: any; error?: string }>;
 }
 
 declare global {

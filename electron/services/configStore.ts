@@ -3,10 +3,11 @@ import path from "node:path";
 import type { ConnectorSettings } from "../types";
 
 const DEFAULT_SETTINGS: ConnectorSettings = {
-  cloudBaseUrl: "https://647dab5faf984710854a179a.mockapi.io/tally",
+  cloudBaseUrl: `${process.env.NEXT_PUBLIC_BE}/v1/tally/modules`,
   accessToken: "",
   tallyHost: "127.0.0.1",
-  tallyPort: 9000
+  tallyPort: 9000,
+  connectionString: ""
 };
 
 export class ConfigStore {
@@ -24,7 +25,8 @@ export class ConfigStore {
         cloudBaseUrl: parsed.cloudBaseUrl ?? DEFAULT_SETTINGS.cloudBaseUrl,
         accessToken: parsed.accessToken ?? DEFAULT_SETTINGS.accessToken,
         tallyHost: parsed.tallyHost ?? DEFAULT_SETTINGS.tallyHost,
-        tallyPort: parsed.tallyPort ?? DEFAULT_SETTINGS.tallyPort
+        tallyPort: parsed.tallyPort ?? DEFAULT_SETTINGS.tallyPort,
+        connectionString: parsed.connectionString ?? DEFAULT_SETTINGS.connectionString
       };
     } catch {
       return { ...DEFAULT_SETTINGS };
@@ -36,7 +38,8 @@ export class ConfigStore {
       cloudBaseUrl: input.cloudBaseUrl.trim() || DEFAULT_SETTINGS.cloudBaseUrl,
       accessToken: input.accessToken?.trim() || DEFAULT_SETTINGS.accessToken,
       tallyHost: input.tallyHost.trim() || DEFAULT_SETTINGS.tallyHost,
-      tallyPort: Number.isFinite(input.tallyPort) ? input.tallyPort : DEFAULT_SETTINGS.tallyPort
+      tallyPort: Number.isFinite(input.tallyPort) ? input.tallyPort : DEFAULT_SETTINGS.tallyPort,
+      connectionString: input.connectionString?.trim() ?? ""
     };
 
     await mkdir(path.dirname(this.filePath), { recursive: true });
