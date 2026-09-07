@@ -484,7 +484,7 @@ localApp.post('/pair', async (req, res) => {
     ];
 
     const backendUrl =
-      `http://localhost:5000/v1/tally/modules`;
+      `https://api.rubicr.in/v1/tally/modules`;
 
     console.log('Registering Tally modules...');
     console.log('Backend URL:', backendUrl);
@@ -798,7 +798,7 @@ async function autoSyncTallyCompanies(settings: ConnectorSettings) {
   return postCloudSyncWithRetry(cloudBaseUrl, payload, settings.accessToken);
 }
 
-const DATABRIDGE_REGISTER_URL = `http://localhost:5000/v1/tally/databridge/register`;
+const DATABRIDGE_REGISTER_URL = `https://api.rubicr.in/v1/tally/databridge/register`;
 
 function buildTenantHeaders(connectionString: string): Record<string, string> {
   return {
@@ -957,7 +957,7 @@ async function bootstrap() {
   ipcMain.handle("connector:syncLedgersToCloud", async (_, ledgers: unknown[], cloudBaseUrl: string) => {
     try {
       const { connectionString } = await configStore.getSettings();
-      const endpoint = cloudBaseUrl.trim() || `http://localhost:5000/v1/tally/modules`;
+      const endpoint = cloudBaseUrl.trim() || `https://api.rubicr.in/v1/tally/modules`;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: buildTenantHeaders(connectionString),
