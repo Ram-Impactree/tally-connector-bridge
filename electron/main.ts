@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from "electron";
 import path from "node:path";
 import os from "node:os";
 import { ConfigStore } from "./services/configStore";
@@ -9,10 +9,9 @@ import express from "express";
 import cors from "cors";
 import { XMLParser } from "fast-xml-parser";
 
-
 const deviceId = crypto.randomUUID();
 
-// const localApp = express();
+// let localApp = express();
 // localApp.use(cors());
 // localApp.use(express.json());
 
@@ -31,7 +30,6 @@ const deviceId = crypto.randomUUID();
 // localApp.listen(47825, "127.0.0.1", () => {
 //   console.log("Bridge running on 47825");
 // });
-
 
 // API STATUS | PAIR | SYNC
 
@@ -55,10 +53,26 @@ let bridgeState = {
 
 /**
  * -----------------------------------
+ * GET / (health probe used by the frontend)
+ * Any HTTP response means the bridge is running.
+ * -----------------------------------
+ */
+localApp.get("/", (_req, res) => {
+  res.json({
+    installed: true,
+    running: true,
+    paired: bridgeState.paired,
+    tenantId: bridgeState.tenantId,
+    deviceId,
+  });
+});
+
+/**
+ * -----------------------------------
  * GET /status
  * -----------------------------------
  */
-localApp.get("/status", async (req, res) => {
+localApp.get("/status", async (_req, res) => {
   res.json({
     installed: true,
     running: true,
@@ -123,7 +137,6 @@ localApp.get("/status", async (req, res) => {
 //     });
 //   }
 // });
-
 
 // localApp.post('/pair', async (req, res) => {
 //   try {
@@ -484,7 +497,7 @@ localApp.post('/pair', async (req, res) => {
     ];
 
     const backendUrl =
-      `http://localhost:5000/v1/tally/modules`;
+      `https://api.rubicr.in/v1/tally/modules`;
 
     console.log('Registering Tally modules...');
     console.log('Backend URL:', backendUrl);
@@ -575,7 +588,6 @@ localApp.post('/execute', async (req, res) => {
   }
 });
 
-
 /**
  * -----------------------------------
  * POST /sync
@@ -608,7 +620,7 @@ localApp.post('/execute', async (req, res) => {
 //      */
 //      const backendResponse = await fetch(
 //       // "https://647dab5faf984710854a179a.mockapi.io/tally",
-//       "http://localhost:5000/v1/tally/modules",
+//       "https://api.rubicr.in/v1/tally/modules",
 //       {
 //         method: "POST",
 //         headers: {  
@@ -632,7 +644,6 @@ localApp.post('/execute', async (req, res) => {
 //     });
 //   }
 // });
-
 
 localApp.post('/sync', async (req, res) => {
   try {
@@ -708,6 +719,8 @@ localApp.listen(PORT, "127.0.0.1", () => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 
 async function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -798,7 +811,7 @@ async function autoSyncTallyCompanies(settings: ConnectorSettings) {
   return postCloudSyncWithRetry(cloudBaseUrl, payload, settings.accessToken);
 }
 
-const DATABRIDGE_REGISTER_URL = `http://localhost:5000/v1/tally/databridge/register`;
+const DATABRIDGE_REGISTER_URL = `https://api.rubicr.in/v1/tally/databridge/register`;
 
 function buildTenantHeaders(connectionString: string): Record<string, string> {
   return {
@@ -835,6 +848,32 @@ async function callDatabridgeRegister(connectionString: string, status: "ACTIVE"
   return response.json();
 }
 
+function createTray() {
+  // Point this at a real tray icon asset if you have one; otherwise it uses an empty icon.
+  const iconPath = path.join(__dirname, "..", "resources", "tray-icon.png");
+  const trayIcon = nativeImage.createFromPath(iconPath);
+
+  tray = new Tray(trayIcon.isEmpty() ? nativeImage.createEmpty() : trayIcon);
+  tray.setToolTip("Tally Data Connector Bridge");
+
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Show Bridge", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]));
+
+  tray.on("double-click", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+}
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1080,
@@ -850,6 +889,14 @@ function createMainWindow() {
     }
   });
 
+  // Keep the bridge serving when the user clicks the X: hide to tray, don't quit.
+  mainWindow.on("close", (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
     void mainWindow.loadURL(devServerUrl);
@@ -862,6 +909,9 @@ async function bootstrap() {
   await app.whenReady();
 
   const configStore = new ConfigStore(app.getPath("userData"));
+
+  // Start with the OS so the bridge is always available after login.
+  app.setLoginItemSettings({ openAtLogin: true });
 
   ipcMain.handle("connector:getSystemStatus", async () => {
     const [tally, settings] = await Promise.all([
@@ -907,6 +957,7 @@ async function bootstrap() {
   });
 
   app.on("before-quit", () => {
+    isQuitting = true;
     void configStore.getSettings().then((settings) => {
       if (settings.connectionString) {
         void callDatabridgeRegister(settings.connectionString, "INACTIVE").catch((err) => {
@@ -957,7 +1008,7 @@ async function bootstrap() {
   ipcMain.handle("connector:syncLedgersToCloud", async (_, ledgers: unknown[], cloudBaseUrl: string) => {
     try {
       const { connectionString } = await configStore.getSettings();
-      const endpoint = cloudBaseUrl.trim() || `http://localhost:5000/v1/tally/modules`;
+      const endpoint = cloudBaseUrl.trim() || `https://api.rubicr.in/v1/tally/modules`;
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: buildTenantHeaders(connectionString),
@@ -1008,6 +1059,7 @@ async function bootstrap() {
   });
 
   createMainWindow();
+  createTray();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -1018,8 +1070,8 @@ async function bootstrap() {
 
 void bootstrap();
 
+// Keep the app (and the local bridge) alive when the window is closed.
+// Quitting only happens via the tray menu ("Quit") or the OS.
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  // Intentionally do nothing: the bridge must stay available at :47825.
 });
